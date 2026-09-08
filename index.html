@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>BFM Spin & Save</title>
+<style>
+  :root{
+    --bg:#0c111b;
+    --panel:#151c29;
+    --text:#f7f8fa;
+    --muted:#aeb7c6;
+    --accent:#f2c94c;
+    --red:#dc3545;
+    --blue:#2f80ed;
+    --green:#27ae60;
+    --orange:#f2994a;
+    --purple:#9b51e0;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;
+    font-family:Inter,Segoe UI,Arial,sans-serif;
+    background:radial-gradient(circle at top,#1b2638 0,#0c111b 60%);
+    color:var(--text);
+    min-height:100vh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:24px;
+  }
+  .app{
+    width:min(1000px,100%);
+    display:grid;
+    grid-template-columns:1.15fr .85fr;
+    gap:28px;
+    align-items:center;
+  }
+  .wheel-wrap{
+    position:relative;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+  }
+  canvas{
+    width:min(560px,92vw);
+    height:auto;
+    filter:drop-shadow(0 22px 38px rgba(0,0,0,.42));
+  }
+  .pointer{
+    position:absolute;
+    right:calc(50% - 292px);
+    top:50%;
+    transform:translateY(-50%);
+    width:0;height:0;
+    border-top:18px solid transparent;
+    border-bottom:18px solid transparent;
+    border-right:42px solid var(--accent);
+    filter:drop-shadow(0 3px 3px #0008);
+  }
+  .panel{
+    background:rgba(21,28,41,.94);
+    border:1px solid #ffffff14;
+    border-radius:22px;
+    padding:28px;
+    box-shadow:0 20px 50px #0005;
+  }
+  h1{font-size:38px;line-height:1;margin:0 0 8px}
+  .sub{color:var(--muted);margin-bottom:22px}
+  .offer{
+    display:flex;gap:10px;align-items:flex-start;
+    padding:12px 0;border-bottom:1px solid #ffffff10
+  }
+  .offer:last-of-type{border-bottom:0}
+  .dot{width:10px;height:10px;border-radius:50%;margin-top:5px;flex:none}
+  label.toggle{
+    display:flex;gap:12px;align-items:center;
+    margin:22px 0 14px;
+    background:#0e1521;padding:13px 14px;border-radius:12px;
+    color:#dce3ed;font-size:14px
+  }
+  input[type=checkbox]{width:18px;height:18px}
+  button{
+    width:100%;
+    border:0;border-radius:14px;padding:16px 20px;
+    font-size:19px;font-weight:800;cursor:pointer;
+    color:#111;background:var(--accent);
+    box-shadow:0 8px 22px rgba(242,201,76,.22);
+  }
+  button:disabled{opacity:.55;cursor:not-allowed}
+  .result{
+    min-height:84px;
+    margin-top:18px;padding:15px;
+    border-radius:14px;background:#0e1521;
+    display:flex;align-items:center;justify-content:center;
+    text-align:center;font-size:20px;font-weight:800
+  }
+  .fine{
+    margin-top:12px;color:#8f9bae;font-size:12px;line-height:1.45
+  }
+  @media(max-width:850px){
+    .app{grid-template-columns:1fr}
+    .panel{order:-1}
+    .pointer{right:calc(50% - min(46vw,280px) - 10px)}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="wheel-wrap">
+    <canvas id="wheel" width="700" height="700"></canvas>
+    <div class="pointer"></div>
+  </div>
+
+  <div class="panel">
+    <h1>SPIN & SAVE</h1>
+    <div class="sub">Every spin wins a moving-day prize.</div>
+
+    <div class="offer"><span class="dot" style="background:#dc3545"></span><div><b>Free roll of shrink wrap</b><br><span class="sub">$45 value</span></div></div>
+    <div class="offer"><span class="dot" style="background:#2f80ed"></span><div><b>Six free medium boxes</b><br><span class="sub">$35 value</span></div></div>
+    <div class="offer"><span class="dot" style="background:#27ae60"></span><div><b>$20 off the hourly rate</b></div></div>
+    <div class="offer"><span class="dot" style="background:#f2994a"></span><div><b>$50 off the entire move</b></div></div>
+    <div class="offer"><span class="dot" style="background:#9b51e0"></span><div><b>Two free wardrobe boxes</b><br><span class="sub">$50 value</span></div></div>
+
+    <label class="toggle">
+      <input id="majorDiscount" type="checkbox">
+      Customer has already received a major discount
+    </label>
+
+    <button id="spin">SPIN THE WHEEL</button>
+    <div class="result" id="result">Ready to spin!</div>
+    <div class="fine">
+      One promotional prize per move. If “major discount” is checked, the $20/hour prize is removed from the eligible prize pool before the spin.
+    </div>
+  </div>
+</div>
+
+<script>
+const prizes = [
+  {name:"FREE SHRINK WRAP", detail:"$45 VALUE", color:"#dc3545"},
+  {name:"6 MEDIUM BOXES", detail:"$35 VALUE", color:"#2f80ed"},
+  {name:"$20 OFF / HOUR", detail:"", color:"#27ae60"},
+  {name:"$50 OFF MOVE", detail:"", color:"#f2994a"},
+  {name:"2 WARDROBE BOXES", detail:"$50 VALUE", color:"#9b51e0"}
+];
+
+const canvas = document.getElementById("wheel");
+const ctx = canvas.getContext("2d");
+const btn = document.getElementById("spin");
+const result = document.getElementById("result");
+const majorDiscount = document.getElementById("majorDiscount");
+const cx=350, cy=350, r=320;
+let rotation=0, spinning=false;
+
+function draw(){
+  ctx.clearRect(0,0,700,700);
+  const seg = Math.PI*2/prizes.length;
+  ctx.save();
+  ctx.translate(cx,cy);
+  ctx.rotate(rotation);
+
+  prizes.forEach((p,i)=>{
+    const a0 = i*seg - seg/2;
+    const a1 = a0+seg;
+    ctx.beginPath();
+    ctx.moveTo(0,0);
+    ctx.arc(0,0,r,a0,a1);
+    ctx.closePath();
+    ctx.fillStyle=p.color;
+    ctx.fill();
+    ctx.strokeStyle="#111827";
+    ctx.lineWidth=8;
+    ctx.stroke();
+
+    ctx.save();
+    ctx.rotate(i*seg);
+    ctx.translate(r*0.57,0);
+    ctx.rotate(Math.PI/2);
+    ctx.fillStyle="#fff";
+    ctx.textAlign="center";
+    ctx.textBaseline="middle";
+    ctx.font="800 25px Segoe UI, Arial";
+    ctx.shadowColor="#0008"; ctx.shadowBlur=3;
+    ctx.fillText(p.name,0,-8);
+    if(p.detail){
+      ctx.font="700 17px Segoe UI, Arial";
+      ctx.fillText(p.detail,0,22);
+    }
+    ctx.restore();
+  });
+
+  // center hub
+  ctx.beginPath(); ctx.arc(0,0,82,0,Math.PI*2);
+  ctx.fillStyle="#111827"; ctx.fill();
+  ctx.strokeStyle="#f2c94c"; ctx.lineWidth=8; ctx.stroke();
+  ctx.fillStyle="#f2c94c"; ctx.textAlign="center"; ctx.textBaseline="middle";
+  ctx.font="900 32px Segoe UI, Arial"; ctx.fillText("BFM",0,-7);
+  ctx.fillStyle="#fff"; ctx.font="700 13px Segoe UI, Arial"; ctx.fillText("SPIN & SAVE",0,25);
+  ctx.restore();
+}
+
+function normalize(a){
+  a %= Math.PI*2;
+  return a<0?a+Math.PI*2:a;
+}
+
+function spin(){
+  if(spinning) return;
+  spinning=true; btn.disabled=true; result.textContent="Spinning…";
+
+  let eligible=[0,1,2,3,4];
+  if(majorDiscount.checked) eligible=eligible.filter(i=>i!==2);
+
+  const winner=eligible[Math.floor(Math.random()*eligible.length)];
+  const seg=Math.PI*2/prizes.length;
+
+  // Pointer is at 0 radians (right side). Put selected segment center there.
+  const targetNorm = normalize(-winner*seg);
+  const currentNorm = normalize(rotation);
+  let delta = normalize(targetNorm-currentNorm);
+  delta += Math.PI*2*(6+Math.floor(Math.random()*3));
+
+  const start=rotation, end=rotation+delta, duration=4200;
+  const t0=performance.now();
+
+  function easeOutCubic(t){return 1-Math.pow(1-t,3)}
+  function frame(now){
+    const t=Math.min(1,(now-t0)/duration);
+    rotation=start+(end-start)*easeOutCubic(t);
+    draw();
+    if(t<1) requestAnimationFrame(frame);
+    else{
+      rotation=normalize(end);
+      draw();
+      result.innerHTML = "🎉 YOU WON: " + prizes[winner].name +
+        (prizes[winner].detail ? "<br><span style='font-size:15px;color:#aeb7c6'>"+prizes[winner].detail+"</span>" : "");
+      spinning=false; btn.disabled=false;
+    }
+  }
+  requestAnimationFrame(frame);
+}
+btn.addEventListener("click",spin);
+draw();
+</script>
+</body>
+</html>
